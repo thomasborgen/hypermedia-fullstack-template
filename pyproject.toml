@@ -22,6 +22,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy>=1.13.0",
+    "pre-commit>=4.3.0",
     "pytest>=8.3.3",
     "ruff>=0.7.4",
 ]
@@ -66,7 +67,7 @@ ignore = [
     "B008",
     "E711", # Allow "!= None" also since sqlmodel can't use "is None"
     "E712", # Allow "== True" also since sqlmodel can't use "is True"
- 
+
 ]
 
 fixable = ["ALL"]
