@@ -1,0 +1,31 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - staging
+    env:
+      ENVIRONMENT: staging
+      DOMAIN: ${{ vars.DOMAIN_STAGING }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY_STAGING }}
+      BACKWEB_SECRET_KEY: ${{ secrets.BACKWEB_SECRET_KEY_STAGING }}
+      POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD_STAGING }}
+      POSTGRES_BACKWEB_DB: ${{ vars.POSTGRES_BACKWEB_DB }}
+      POSTGRES_BACKWEB_USER: ${{ vars.POSTGRES_BACKWEB_USER }}
+      POSTGRES_BACKWEB_PASSWORD: ${{ secrets.POSTGRES_BACKWEB_PASSWORD_STAGING }}
+      CORS_ORIGINS: ${{ vars.CORS_ORIGINS_STAGING }}
+      LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN_STAGING }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.yml --project-name ${{ vars.PROJECT_NAME }} build
+      - run: docker compose -f docker-compose.yml --project-name ${{ vars.PROJECT_NAME }} up -d

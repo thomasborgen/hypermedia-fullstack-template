@@ -1,0 +1,161 @@
+volumes:
+  app-db-data:
+  app-db-backups:
+
+networks:
+  traefik-public:
+    # Allow setting it to false for testing
+    external: true
+
+services:
+
+  db:
+    image: postgres:16
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
+      timeout: 10s
+    volumes:
+      - app-db-data:/var/lib/postgresql/data/pgdata
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_DB=${POSTGRES_DB?Variable not set}
+
+  adminer:
+    image: adminer
+    restart: always
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      - db
+    environment:
+      - ADMINER_DESIGN=pepa-linha-dark
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.constraint-label=traefik-public
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.rule=Host(`adminer.${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.entrypoints=http
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.middlewares=https-redirect
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.rule=Host(`adminer.${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.entrypoints=https
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.tls=true
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.tls.certresolver=le
+      - traefik.http.services.${PROJECT_NAME?Variable not set}-adminer.loadbalancer.server.port=8080
+
+  backweb:
+    image: eduardolat/pgbackweb:latest
+    ports:
+      - "8085:8085" # Access the web interface at http://localhost:8085
+    volumes:
+      - app-db-backups:/backups
+    environment:
+      PBW_ENCRYPTION_KEY: "${BACKWEB_SECRET_KEY?Variable not set}"
+      PBW_POSTGRES_CONN_STRING: "postgresql://${POSTGRES_BACKWEB_USER?Variable not set}:${POSTGRES_BACKWEB_PASSWORD?Variable not set}@db:5432/${POSTGRES_BACKWEB_DB?Variable not set}?sslmode=disable"
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.constraint-label=traefik-public
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-backweb-http.rule=Host(`backweb.${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-backweb-http.entrypoints=http
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-backweb-http.middlewares=https-redirect
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-backweb-https.rule=Host(`backweb.${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-backweb-https.entrypoints=https
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-backweb-https.tls=true
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-backweb-https.tls.certresolver=le
+      - traefik.http.services.${PROJECT_NAME?Variable not set}-backweb.loadbalancer.server.port=8085
+
+  prestart:
+    build:
+      context: .
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    command: bash /app/scripts/prestart.sh
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DOMAIN=${DOMAIN}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - PROJECT_NAME=${PROJECT_NAME}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - POSTGRES_SERVER=db
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+
+  server:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    restart: always
+    networks:
+      - traefik-public
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      prestart:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DOMAIN=${DOMAIN}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - PROJECT_NAME=${PROJECT_NAME}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - SECRET_KEY=${SECRET_KEY?Variable not set}
+      - POSTGRES_SERVER=db
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - LOGFIRE_TOKEN=${LOGFIRE_TOKEN?Variable not set}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
+      interval: 100s
+      retries: 10
+      start_period: 30s
+      start_interval: 1s
+      timeout: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.constraint-label=traefik-public
+
+      - traefik.http.services.${PROJECT_NAME?Variable not set}-wms.loadbalancer.server.port=8000
+
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-wms-http.rule=Host(`${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-wms-http.entrypoints=http
+
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-wms-https.rule=Host(`${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-wms-https.entrypoints=https
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-wms-https.tls=true
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-wms-https.tls.certresolver=le
+
+      # Enable redirection for HTTP and HTTPS
+      - traefik.http.routers.${PROJECT_NAME?Variable not set}-wms-http.middlewares=https-redirect
+

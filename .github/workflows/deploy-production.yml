@@ -1,0 +1,31 @@
+name: Deploy to Production
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - production
+    env:
+      ENVIRONMENT: production
+      DOMAIN: ${{ vars.DOMAIN }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      BACKWEB_SECRET_KEY: ${{ secrets.BACKWEB_SECRET_KEY }}
+      POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+      POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_BACKWEB_DB: ${{ vars.POSTGRES_BACKWEB_DB }}
+      POSTGRES_BACKWEB_USER: ${{ vars.POSTGRES_BACKWEB_USER }}
+      POSTGRES_BACKWEB_PASSWORD: ${{ secrets.POSTGRES_BACKWEB_PASSWORD }}
+      CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
+      LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - run: docker compose -f docker-compose.yml --project-name ${{ vars.PROJECT_NAME }} build
+      - run: docker compose -f docker-compose.yml --project-name ${{ vars.PROJECT_NAME }} up -d

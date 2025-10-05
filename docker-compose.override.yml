@@ -1,0 +1,20 @@
+services:
+  server:
+    restart: "no"
+    build:
+      context: .
+    command:
+      - fastapi
+      - run
+      - --reload
+      - "server/main.py"
+    develop:
+      watch:
+        - path: ./server
+          action: sync
+          target: /app/server
+          ignore:
+            - .venv
+        - path: ./pyproject.toml
+          action: rebuild
+
